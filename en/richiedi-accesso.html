@@ -1,0 +1,101 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Request Access | Exceed Intelligence</title>
+  <link rel="stylesheet" href="../static/style.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="logo">
+        <img src="../static/logos/logo_exceed_intelligence.png" alt="Exceed Intelligence Logo" style="height:110px;"/>
+      </a>
+      <span id="navToggle" class="toggle">&#9776;</span>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="about.html">About</a></li>
+        <li><a href="products.html">Products</a></li>
+        <li><a href="pitch.html">Pitch</a></li>
+        <li><a href="contact.html">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="container text-center">
+      <h1>Request <span class="hero-accent">Access to the Pitch</span></h1>
+      <p>Fill out the form: your request will be reviewed and, if approved, you'll receive the material by email.</p>
+    </div>
+  </header>
+
+  <!-- Form Section -->
+  <section style="background:#fff;">
+    <div class="container" style="max-width:520px;margin:0 auto;">
+      <form id="accessForm">
+        <div style="margin-bottom:1rem;text-align:left;">
+          <label for="nome">Full Name</label><br/>
+          <input type="text" id="nome" name="nome" required style="width:100%;padding:0.6rem;margin-top:0.3rem;border:1px solid #dbe4ff;border-radius:6px;"/>
+        </div>
+        <div style="margin-bottom:1rem;text-align:left;">
+          <label for="azienda">Company / Role</label><br/>
+          <input type="text" id="azienda" name="azienda" required style="width:100%;padding:0.6rem;margin-top:0.3rem;border:1px solid #dbe4ff;border-radius:6px;"/>
+        </div>
+        <div style="margin-bottom:1rem;text-align:left;">
+          <label for="email">Email</label><br/>
+          <input type="email" id="email" name="email" required style="width:100%;padding:0.6rem;margin-top:0.3rem;border:1px solid #dbe4ff;border-radius:6px;"/>
+        </div>
+        <div style="margin-bottom:1.5rem;text-align:left;">
+          <label for="motivo">Reason for the request</label><br/>
+          <textarea id="motivo" name="motivo" rows="4" required style="width:100%;padding:0.6rem;margin-top:0.3rem;border:1px solid #dbe4ff;border-radius:6px;"></textarea>
+        </div>
+        <button type="submit" class="btn" style="width:100%;border:none;cursor:pointer;">Send Request</button>
+      </form>
+      <p id="formMsg" style="margin-top:1.5rem;font-weight:500;"></p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Exceed Intelligence | CosAI. All rights reserved.</p>
+  </footer>
+
+  <script src="../static/scripts.js"></script>
+  <script>
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwxG7eK90arwf8V-z_1GuTlQuZLyyaOHTgNsB3jiad98VfOCG_1ZX6UgfVBQwEIkdT6/exec";
+
+    document.getElementById("accessForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const data = {
+        nome: document.getElementById("nome").value,
+        azienda: document.getElementById("azienda").value,
+        email: document.getElementById("email").value,
+        motivo: document.getElementById("motivo").value
+      };
+      const msg = document.getElementById("formMsg");
+      msg.textContent = "Sending...";
+
+      fetch(WEB_APP_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(data)
+      })
+        .then(function () {
+          msg.textContent = "Request sent. You'll receive a reply by email if approved.";
+          document.getElementById("accessForm").reset();
+        })
+        .catch(function () {
+          msg.textContent = "Something went wrong. Please try again or write to andrea.cosa@exceedintelligence.ai.";
+        });
+    });
+  </script>
+</body>
+</html>
