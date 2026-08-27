@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CosAI — Grafo Interattivo Rete 2086CC</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    overflow: hidden;
+  }
+  #graph-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    background: #0d1117;
+  }
+  svg { width: 100%; height: 100%; cursor: grab; }
+  svg:active { cursor: grabbing; }
+
+  /* TOOLTIP */
+  #tooltip {
+    position: absolute;
+    background: rgba(22, 27, 34, 0.95);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 14px 18px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    max-width: 380px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+  }
+  #tooltip h3 { margin: 0 0 4px 0; font-size: 15px; color: #f0f6fc; font-weight: 600; }
+  #tooltip .source-tag { font-size: 11px; color: #58a6ff; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; }
+  #tooltip .meta { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
+  #tooltip .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 4px; margin-bottom: 4px; }
+  .badge-PU { background: #8B5CF6; color: #fff; }
+  .badge-A-PU { background: #3B82F6; color: #fff; }
+  .badge-A-AZ { background: #10B981; color: #fff; }
+  .badge-TODO { background: #EF4444; color: #fff; }
+  .badge-REPORT { background: #F59E0B; color: #000; }
+
+  /* PANNELLI SCORREVOLI */
+  .side-panel {
+    position: absolute;
+    top: 20px;
+    bottom: 80px;
+    width: 440px;
+    background: rgba(13, 17, 23, 0.96);
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.7);
+    backdrop-filter: blur(12px);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    overflow: hidden;
+  }
+  #story-panel { left: 20px; transform: translateX(-480px); opacity: 0; pointer-events: none; }
+  #story-panel.open { transform: translateX(0); opacity: 1; pointer-events: auto; }
+  #legend-panel { right: 20px; transform: translateX(460px); opacity: 0; pointer-events: none; width: 340px; }
+  #legend-panel.open { transform: translateX(0); opacity: 1; pointer-events: auto; }
+
+  .panel-header { background: rgba(22, 27, 34, 0.9); padding: 14px 18px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+  .panel-header h3 { font-size: 16px; color: #f0f6fc; font-weight: 600; }
+  .panel-body { padding: 18px; overflow-y: auto; font-size: 13.5px; line-height: 1.55; color: #c9d1d9; flex-grow: 1; }
+  .story-section { margin-bottom: 16px; border-bottom: 1px solid #21262d; padding-bottom: 12px; }
+  .story-section:last-child { margin-bottom: 0; border-bottom: none; }
+  .story-title { font-weight: 600; color: #58a6ff; margin-bottom: 6px; font-size: 14px; }
+
+  /* LEGENDA ELEMENTI */
+  .legend-item { display: flex; align-items: center; margin-bottom: 12px; font-size: 14px; font-weight: 500; color: #f0f6fc; }
+  .legend-dot { width: 16px; height: 16px; border-radius: 50%; margin-right: 12px; flex-shrink: 0; }
+  .legend-line { width: 28px; height: 4px; margin-right: 12px; flex-shrink: 0; }
+  .legend-count { margin-left: auto; padding-left: 12px; color: #8b949e; font-size: 13px; font-weight: 600; }
+
+  /* CONTROLLI IN BASSO */
+  #controls { position: absolute; bottom: 20px; left: 20px; display: flex; gap: 8px; z-index: 100; }
+  .btn {
+    background: rgba(22, 27, 34, 0.92);
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: #30363d; border-color: #58a6ff; }
+  .btn.active { background: #1f6feb; border-color: #58a6ff; color: #fff; }
+
+  /* INFO PANEL */
+  #info-panel {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(22, 27, 34, 0.92);
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 14px 18px;
+    max-width: 290px;
+    font-size: 12px;
+    color: #8b949e;
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #info-panel strong { color: #f0f6fc; }
+
+  /* MODALE ARCHITETTURA */
+  #arch-modal {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 96vw;
+    height: 90vh;
+    display: none;
+    z-index: 300;
+  }
+  #arch-modal.open { display: flex; }
+  .modal-overlay { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); z-index: 299; display: none; }
+  .modal-overlay.open { display: block; }
+  pre.ascii-arch {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    line-height: 1.3;
+    color: #58a6ff;
+    background: #090d11;
+    padding: 24px;
+    border-radius: 8px;
+    border: 1px solid #30363d;
+    overflow: auto;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* GRAFO SVG STYLES */
+  .link-line { stroke-opacity: 0.45; transition: stroke-opacity 0.2s, stroke-width 0.2s, opacity 0.2s; }
+  .link-line.highlighted { stroke-opacity: 1; stroke-width: 3px !important; }
+  .node-circle { stroke: #0d1117; stroke-width: 2px; cursor: pointer; transition: opacity 0.2s, transform 0.2s; }
+  .node-circle.dimmed { opacity: 0.08; }
+  .link-line.dimmed { opacity: 0.03; }
+  .node-label-group { pointer-events: none; transition: opacity 0.2s; }
+  .node-label-group.dimmed { opacity: 0.08; }
+  .node-label-title { font-size: 11px; fill: #ffffff; text-anchor: middle; font-weight: 700; }
+  .node-label-source { font-size: 9px; fill: #8b949e; text-anchor: middle; font-weight: 400; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div id="graph-container">
+  <svg id="graph"></svg>
+
+  <div id="tooltip">
+    <h3 id="tt-title"></h3>
+    <div class="source-tag" id="tt-source"></div>
+    <div class="meta" id="tt-meta"></div>
+    <div id="tt-badges"></div>
+    <div class="meta" id="tt-desc" style="margin-top:8px;"></div>
+  </div>
+
+  <!-- PANNELLO LEGENDA -->
+  <div id="legend-panel" class="side-panel">
+    <div class="panel-header">
+      <h3 style="font-size: 16px;">GRUPPI NODI</h3>
+      <button class="btn" onclick="togglePanel('legend-panel')" style="padding:2px 8px; font-size:14px;">✕</button>
+    </div>
+    <div class="panel-body">
+      <div class="legend-item"><div class="legend-dot" style="background:#8B5CF6"></div>Celle PU (fonti normative)<span class="legend-count">6</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div>Atomi PU (vincoli)<span class="legend-count">16</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#10B981"></div>Atomi AZ (evidenze)<span class="legend-count">8</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#EF4444"></div>TO-DO (azioni)<span class="legend-count">3</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div>Report<span class="legend-count">1</span></div>
+
+      <h3 style="font-size:15px; color:#f0f6fc; font-weight:600; margin-top:24px; margin-bottom:12px;">TIPI COLLEGAMENTO</h3>
+      <div class="legend-item"><div class="legend-line" style="background:#10B981"></div>COMPONE / ALLINEATO</div>
+      <div class="legend-item"><div class="legend-line" style="background:#8B5CF6"></div>CORRELA (Norme)</div>
+      <div class="legend-item"><div class="legend-line" style="background:#EF4444; border-top: 2px dashed #EF4444; height:0;"></div>GAP / CONFLITTO</div>
+      <div class="legend-item"><div class="legend-line" style="background:#F59E0B"></div>GENERA / ALIMENTA</div>
+      <div class="legend-item"><div class="legend-line" style="background:#8b949e"></div>NON VERIFICABILE</div>
+    </div>
+  </div>
+
+  <!-- PANNELLO STORIA E DIAGNOSI -->
+  <div id="story-panel" class="side-panel">
+    <div class="panel-header">
+      <h3>📖 Storia e Diagnosi della Rete</h3>
+      <button class="btn" onclick="togglePanel('story-panel')" style="padding:2px 8px; font-size:14px;">✕</button>
+    </div>
+    <div class="panel-body">
+      <div class="story-section">
+        <div class="story-title">1. L'Azienda e le Decisioni</div>
+        Dall'analisi della documentazione (Visura Camerale <code>D-LEG-VISU-02</code>, Organigramma <code>D-GOV-ORG-06</code>, Verbali CdA <code>D-GOV-VCDA-33</code>) emerge che l'azienda opera nel <strong>settore metalmeccanico</strong> con un Capitale Sociale di € 120.000,00 i.v., suddiviso tra due soci paritetici. La governance è affidata ad un CdA composto da 3 membri, in cui il Presidente detiene deleghe operative esclusive. L'Organismo di Vigilanza (OdV 231) è stato istituito in forma monocratica coincidente con il consulente fiscale dell'azienda.<br><br>
+        Sul piano economico-finanziario si registra un fatturato di € 4.5M con un <strong>calo del -12% nell'ultimo esercizio</strong>, in presenza dell'assenza totale di verbali CdA recanti verifiche periodiche sulla tenuta degli assetti organizzativi e contabili negli ultimi 12 mesi.
+      </div>
+      <div class="story-section">
+        <div class="story-title">2. Collisioni Normative & Sentenze</div>
+        La struttura descritta entra in collisione diretta con le fonti pubbliche della Rete PU:
+        <ul style="padding-left:16px; margin-top:6px;">
+          <li style="margin-bottom:4px;"><strong>Art. 2086 c.2 c.c.:</strong> Violazione dell'obbligo di istituzione di assetti adeguati e prevenzione della crisi.</li>
+          <li style="margin-bottom:4px;"><strong>Art. 14 CCII:</strong> Mancata rilevazione tempestiva dei segnali di allerta e assenza di reporting verso i sindaci.</li>
+          <li style="margin-bottom:4px;"><strong>Linee Guida CNDCEC & Cass. 28710/2020:</strong> Incompatibilità dell'OdV monocratico (assenza di indipendenza) e responsabilità dei consiglieri privi di delega per omessa vigilanza.</li>
+        </ul>
+      </div>
+      <div class="story-section">
+        <div class="story-title">3. Azioni Obbligatorie (TO-DO)</div>
+        <ul style="padding-left:16px; margin-top:4px;">
+          <li style="margin-bottom:6px;"><strong style="color:#EF4444">TODO-001:</strong> Rinominare OdV 231 (Sostituzione organo monocratico con soggetti terzi indipendenti).</li>
+          <li style="margin-bottom:6px;"><strong style="color:#EF4444">TODO-002:</strong> Eseguire verifica assetti organizzativi e istituire funzione di Internal Audit.</li>
+          <li style="margin-bottom:6px;"><strong style="color:#EF4444">TODO-003:</strong> Inviare segnalazione allerta crisi immediata al CdA per il calo del fatturato (-12%).</li>
+        </ul>
+      </div>
+      <div class="story-section">
+        <div class="story-title">4. Scoring Finale</div>
+        <div style="font-size:14px; font-weight:bold; color:#EF4444; margin-top:4px;">
+          Score Compliance: 42 / 100 — HARD STOP ATTIVO
+        </div>
+        <div style="font-size:12px; color:#8b949e; margin-top:4px;">
+          Stato di non conformità grave con elevato rischio di responsabilità civile ed amministrativa per gli organi di gestione.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTROLLI IN BASSO -->
+  <div id="controls">
+    <button class="btn" id="btn-fullscreen" onclick="toggleFullscreen()">🖥️ Schermo Intero</button>
+    <button class="btn" id="btn-story" onclick="togglePanel('story-panel')">📖 Storia & Diagnosi</button>
+    <button class="btn" id="btn-legend" onclick="togglePanel('legend-panel')">🎨 Legenda Rete</button>
+    <button class="btn" onclick="resetZoom()">Reset zoom</button>
+    <button class="btn" onclick="toggleLabels()">Etichette</button>
+    <button class="btn" onclick="togglePhysics()">Fisica</button>
+    <button class="btn active" onclick="openArchModal()">🏗️ Architettura CosAI</button>
+  </div>
+
+  <!-- INFO PANEL FISSO -->
+  <div id="info-panel">
+    <strong>CosAI Rete 2086CC</strong><br>
+    Score: <strong style="color:#EF4444">42/100</strong> | <span style="color:#EF4444; font-weight:bold;">HARD STOP attivo</span><br>
+    Nodi: <strong>34</strong> | Archi: <strong>40</strong><br>
+    <span style="color:#EF4444">●</span> 3 CONFLITTI | <span style="color:#F59E0B">●</span> 11 GAP
+  </div>
+</div>
+
+<!-- MODALE ARCHITETTURA -->
+<div id="modal-overlay" class="modal-overlay" onclick="closeArchModal()"></div>
+<div id="arch-modal" class="modal-panel side-panel">
+  <div class="panel-header">
+    <h3>🏛️ Architettura CosAI (Fase 7 Overlay Analysis)</h3>
+    <button class="btn" onclick="closeArchModal()" style="padding: 2px 8px; font-size:14px;">✕</button>
+  </div>
+  <div class="panel-body">
+    <pre class="ascii-arch">
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                               RETE PU (PUBBLICA)                                       │
+│  ┌────────────┐         ┌────────────┐         ┌────────────┐                          │
+│  │ 2086 c.2   │         │ CCII art.  │         │   PdR 167  │                          │
+│  │   L1-L5    │         │   L1-L5    │         │   L6-L7    │                          │
+│  └─────┬──────┘         └─────┬──────┘         └─────┬──────┘                          │
+│        └──────────────────────┼──────────────────────┘                                 │
+│                               ▼                                                        │
+│                [ATOMI PU: A-PU-001...A-PU-008]                                         │
+│                TAG: GOVER, RESPO, VIG-I, VIG-F...                                      │
+└───────────────────────────────┬────────────────────────────────────────────────────────┘
+                                │
+                 OVERLAY ANALYSIS (Fase 7 CosAI)
+             Gerarchia: L1-L5 > L6-L7 > L10.3 > L10.6
+                                │
+┌───────────────────────────────┼────────────────────────────────────────────────────────┐
+│                               RETE AZ (AZIENDALE)                                      │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐                         │
+│  │  D-GOV-ORG-06   │  │  D-LEG-VISU-02  │  │  D-GOV-VCDA-33  │                         │
+│  │  Organigramma   │  │     Visura      │  │    Verbali CdA  │                         │
+│  │  Rango: L10.6   │  │  Rango: L1-L5   │  │  Rango: L10.3   │                         │
+│  │  TAG: FUNAZ...  │  │  TAG: DESTI...  │  │  TAG: FUNAZ...  │                         │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘                         │
+│           └────────────────────┼────────────────────┘                                  │
+│                                ▼                                                       │
+│                [ATOMI AZ: A-AZ-001...A-AZ-012]                                         │
+└───────────────────────────────┬────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+    ┌───────────────────────────────────────┐         ┌───────────────────────────────┐
+    │          MATRICE COLLISIONE           │────────▶│ NORME SANZIONATORIE & SENTENZE│
+    │  ALLINEATO / GAP / CONFLITTO / NON VER│         │ (Cass. 28710/20, 231/01 ecc.) │
+    └───────────────────┬───────────────────┘         └───────────────────────────────┘
+                        │
+                        ▼
+            ┌───────────────────────┐
+            │     TO-DO ACTIONS     │
+            │   (TODO-001...003)    │
+            └───────────────────────┘
+    </pre>
+  </div>
+</div>
+
+<script>
+function toggleFullscreen() {
+  const elem = document.documentElement;
+  if (!document.fullscreenElement && !document.mozFullScreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+    if (elem.requestFullscreen) elem.requestFullscreen();
+    else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
+    else if (elem.mozRequestFullScreen) elem.mozRequestFullScreen();
+    else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.msExitFullscreen) document.msExitFullscreen();
+    else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+}
+
+document.addEventListener("click", function triggerAutoFullscreen() {
+  if (!document.fullscreenElement) toggleFullscreen();
+  document.removeEventListener("click", triggerAutoFullscreen);
+}, { once: true });
+
+// DATI RETE COMPLETA COSAI (34 NODI)
+const nodes = [
+  // CELLE PU
+  {id:"PU-2086", group:"PU", label:"Art. 2086 c.2", source:"Codice Civile", desc:"Dovere di vigilanza e assetti organizzativi adeguati (HUB CENTRALE)", size:32, color:"#8B5CF6"},
+  {id:"PU-14CCII", group:"PU", label:"Art. 14 CCII", source:"Codice della Crisi", desc:"Segnalazione degli organi di controllo e allerta precoce", size:22, color:"#8B5CF6"},
+  {id:"PU-2381", group:"PU", label:"Art. 2381 c.c.", source:"Codice Civile", desc:"Presidente, comitato esecutivo e deleghe amministrative", size:20, color:"#8B5CF6"},
+  {id:"PU-2403", group:"PU", label:"Art. 2403 c.c.", source:"Codice Civile", desc:"Doveri del collegio sindacale e controllo di gestione", size:20, color:"#8B5CF6"},
+  {id:"PU-CASS28710", group:"PU", label:"Cass. 28710/2020", source:"Giurisprudenza", desc:"Responsabilità amministratori senza deleghe per omessa vigilanza", size:20, color:"#8B5CF6"},
+  {id:"PU-CNDCEC", group:"PU", label:"Norme CNDCEC", source:"Linee Guida CNDCEC", desc:"Standard di valutazione degli assetti organizzativi e contabili", size:20, color:"#8B5CF6"},
+
+  // ATOMI PU
+  {id:"A-PU-001", group:"A-PU", label:"A-PU-001", source:"Art. 2086 c.2 c.c.", desc:"Obbligo di adozione di assetti organizzativi adeguati", size:12, color:"#3B82F6"},
+  {id:"A-PU-002", group:"A-PU", label:"A-PU-002", source:"Art. 2086 c.2 c.c.", desc:"Rilevazione tempestiva dello stato di crisi aziendale", size:12, color:"#3B82F6"},
+  {id:"A-PU-003", group:"A-PU", label:"A-PU-003", source:"Art. 2086 c.2 c.c.", desc:"Perdita della continuità aziendale e azioni correttive", size:12, color:"#3B82F6"},
+  {id:"A-PU-004", group:"A-PU", label:"A-PU-004", source:"Art. 14 CCII", desc:"Obbligo segnalazione sindaci e organi di controllo", size:12, color:"#3B82F6"},
+  {id:"A-PU-005", group:"A-PU", label:"A-PU-005", source:"Art. 14 CCII", desc:"Tempestività della risposta dell'organo amministrativo", size:12, color:"#3B82F6"},
+  {id:"A-PU-006", group:"A-PU", label:"A-PU-006", source:"Art. 14 CCII", desc:"Monitoraggio flussi di cassa e indicatori di allerta", size:12, color:"#3B82F6"},
+  {id:"A-PU-007", group:"A-PU", label:"A-PU-007", source:"Art. 14 CCII", desc:"Piano di risanamento e composizione negoziata", size:12, color:"#3B82F6"},
+  {id:"A-PU-008", group:"A-PU", label:"A-PU-008", source:"Norme CNDCEC", desc:"Indipendenza e autonomia dell'Organismo di Vigilanza", size:12, color:"#3B82F6"},
+  {id:"A-PU-009", group:"A-PU", label:"A-PU-009", source:"Norme CNDCEC", desc:"Verifiche periodiche sull'adeguatezza degli assetti", size:12, color:"#3B82F6"},
+  {id:"A-PU-010", group:"A-PU", label:"A-PU-010", source:"Art. 25 D.Lgs. 231/01", desc:"Modello di Organizzazione, Gestione e Controllo 231", size:12, color:"#3B82F6"},
+  {id:"A-PU-011", group:"A-PU", label:"A-PU-011", source:"Art. 25 D.Lgs. 231/01", desc:"Flussi informativi verso l'OdV e tracciabilità", size:12, color:"#3B82F6"},
+  {id:"A-PU-012", group:"A-PU", label:"A-PU-012", source:"Cass. 28710/2020", desc:"Dovere di agire informati dei consiglieri non esecutivi", size:12, color:"#3B82F6"},
+  {id:"A-PU-013", group:"A-PU", label:"A-PU-013", source:"Cass. 28710/2020", desc:"Limiti alla delega di poteri di gestione", size:12, color:"#3B82F6"},
+  {id:"A-PU-014", group:"A-PU", label:"A-PU-014", source:"Giurisprudenza", desc:"Valutazione dei segnali di allarme pre-crisi", size:12, color:"#3B82F6"},
+  {id:"A-PU-015", group:"A-PU", label:"A-PU-015", source:"Art. 2381 c.c.", desc:"Valutazione del generale andamento della gestione", size:12, color:"#3B82F6"},
+  {id:"A-PU-016", group:"A-PU", label:"A-PU-016", source:"Art. 2403 c.c.", desc:"Vigilanza sull'adeguatezza della struttura organizzativa", size:12, color:"#3B82F6"},
+
+  // ATOMI AZ (DECISIONI AZIENDALI)
+  {id:"A-AZ-001", group:"A-AZ", label:"A-AZ-001", source:"Organigramma Aziendale", desc:"Struttura gerarchica rigida con reporting diretto al CEO", size:14, color:"#10B981"},
+  {id:"A-AZ-002", group:"A-AZ", label:"A-AZ-002", source:"Visura Camerale", desc:"CdA a 3 membri con deleghe operative esclusive al Presidente", size:14, color:"#10B981"},
+  {id:"A-AZ-003", group:"A-AZ", label:"A-AZ-003", source:"Verbale CdA n.32", desc:"Nomina OdV monocratico coincidente con consulente fiscale", size:14, color:"#10B981"},
+  {id:"A-AZ-004", group:"A-AZ", label:"A-AZ-004", source:"Verbale CdA n.33", desc:"Assenza di delibere di verifica assetti ex 2086 negli ultimi 12m", size:14, color:"#10B981"},
+  {id:"A-AZ-005", group:"A-AZ", label:"A-AZ-005", source:"Verbale CdA n.35", desc:"Mancata formalizzazione del piano di Internal Audit", size:14, color:"#10B981"},
+  {id:"A-AZ-006", group:"A-AZ", label:"A-AZ-006", source:"Organigramma Aziendale", desc:"Assenza di una funzione separata di risk management", size:14, color:"#10B981"},
+  {id:"A-AZ-007", group:"A-AZ", label:"A-AZ-007", source:"Verbale CdA n.33", desc:"Rilevato calo del fatturato del -12% senza analisi causale", size:14, color:"#10B981"},
+  {id:"A-AZ-008", group:"A-AZ", label:"A-AZ-008", source:"Organigramma Aziendale", desc:"Mancanza di flussi informativi formalizzati verso i sindaci", size:14, color:"#10B981"},
+
+  // TO-DO
+  {id:"TODO-001", group:"TODO", label:"TODO-001", source:"CosAI Engine", desc:"Rinominare OdV 231 integrando componenti esterni ed indipendenti", size:16, color:"#EF4444"},
+  {id:"TODO-002", group:"TODO", label:"TODO-002", source:"CosAI Engine", desc:"Eseguire verifica assetti e istituire funzione Internal Audit", size:16, color:"#EF4444"},
+  {id:"TODO-003", group:"TODO", label:"TODO-003", source:"CosAI Engine", desc:"Inviare segnalazione allerta crisi immediata al CdA", size:16, color:"#EF4444"},
+
+  // REPORT
+  {id:"REPORT-JSON", group:"REPORT", label:"Report JSON", source:"CosAI Output", desc:"Dossier completo di audit e matrice delle collisioni", size:16, color:"#F59E0B"}
+];
+
+// =============================================================================
+// LINK – OGNI ATOMO PU DEVE AVERE ALMENO UN COLLEGAMENTO VERSO UN ATOMO AZ
+// AGGIUNTI I GAP PER A-PU-004, A-PU-005, A-PU-007 → A-AZ-007
+// =============================================================================
+const links = [
+  // --- CORRELAZIONI tra CELLE PU (norme imperative) ---
+  {source:"PU-2086", target:"PU-14CCII", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-2381", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-2403", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-CASS28710", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-CNDCEC", type:"CORRELA", color:"#8B5CF6"},
+
+  // --- NORMA IMPERATIVA → PRECETTI (COMPONE) ---
+  {source:"PU-2086", target:"A-PU-001", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2086", target:"A-PU-002", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2086", target:"A-PU-003", type:"COMPONE", color:"#10B981"},
+  {source:"PU-14CCII", target:"A-PU-004", type:"COMPONE", color:"#10B981"},
+  {source:"PU-14CCII", target:"A-PU-005", type:"COMPONE", color:"#10B981"},
+  {source:"PU-14CCII", target:"A-PU-006", type:"COMPONE", color:"#10B981"},
+  {source:"PU-14CCII", target:"A-PU-007", type:"COMPONE", color:"#10B981"},
+  {source:"PU-CNDCEC", target:"A-PU-008", type:"COMPONE", color:"#10B981"},
+  {source:"PU-CNDCEC", target:"A-PU-009", type:"COMPONE", color:"#10B981"},
+  {source:"PU-CNDCEC", target:"A-PU-010", type:"COMPONE", color:"#10B981"},
+  {source:"PU-CNDCEC", target:"A-PU-011", type:"COMPONE", color:"#10B981"},
+  {source:"PU-CASS28710", target:"A-PU-012", type:"COMPONE", color:"#10B981"},
+  {source:"PU-CASS28710", target:"A-PU-013", type:"COMPONE", color:"#10B981"},
+  {source:"PU-CASS28710", target:"A-PU-014", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2381", target:"A-PU-015", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2403", target:"A-PU-016", type:"COMPONE", color:"#10B981"},
+
+  // --- PRECETTI → DECISIONI AZIENDALI (GAP) ---
+  {source:"A-PU-008", target:"A-AZ-003", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-001", target:"A-AZ-004", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-009", target:"A-AZ-005", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-006", target:"A-AZ-007", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-012", target:"A-AZ-002", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-016", target:"A-AZ-008", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-003", target:"A-AZ-007", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-011", target:"A-AZ-008", type:"GAP", color:"#EF4444"},
+  // NUOVI: A-PU-004, A-PU-005, A-PU-007 → A-AZ-007 (perché la decisione aziendale di non analizzare il calo viola anche questi obblighi)
+  {source:"A-PU-004", target:"A-AZ-007", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-005", target:"A-AZ-007", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-007", target:"A-AZ-007", type:"GAP", color:"#EF4444"},
+
+  // --- DECISIONE AZIENDALE → SENTENZA (rischio sanzione) ---
+  {source:"A-AZ-003", target:"PU-CASS28710", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-004", target:"PU-CASS28710", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-005", target:"PU-CASS28710", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-007", target:"PU-CASS28710", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-002", target:"PU-CASS28710", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-008", target:"PU-CASS28710", type:"GENERA", color:"#F59E0B"},
+
+  // --- DECISIONE AZIENDALE → TO-DO (azione correttiva) ---
+  {source:"A-AZ-003", target:"TODO-001", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-004", target:"TODO-002", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-007", target:"TODO-003", type:"GENERA", color:"#F59E0B"},
+
+  // --- TO-DO → REPORT ---
+  {source:"TODO-001", target:"REPORT-JSON", type:"GENERA", color:"#F59E0B"},
+  {source:"TODO-002", target:"REPORT-JSON", type:"GENERA", color:"#F59E0B"},
+  {source:"TODO-003", target:"REPORT-JSON", type:"GENERA", color:"#F59E0B"},
+
+  // --- COLLEGAMENTI INTERNI AZIENDALI (CORRELA) ---
+  {source:"A-AZ-001", target:"A-AZ-006", type:"CORRELA", color:"#8B5CF6"},
+  {source:"A-AZ-002", target:"A-AZ-001", type:"CORRELA", color:"#8B5CF6"}
+];
+
+// D3.JS ENGINE
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+const svg = d3.select("#graph")
+  .attr("viewBox", [0, 0, width, height]);
+
+const defs = svg.append("defs");
+const colors = ["#8B5CF6", "#10B981", "#EF4444", "#F59E0B", "#8b949e"];
+colors.forEach(c => {
+  defs.append("marker")
+    .attr("id", `arrow-${c.replace('#', '')}`)
+    .attr("viewBox", "0 -5 10 10")
+    .attr("refX", 22)
+    .attr("refY", 0)
+    .attr("markerWidth", 6)
+    .attr("markerHeight", 6)
+    .attr("orient", "auto")
+    .append("path")
+    .attr("d", "M0,-5L10,0L0,5")
+    .attr("fill", c);
+});
+
+const g = svg.append("g");
+
+const zoom = d3.zoom()
+  .scaleExtent([0.2, 4])
+  .on("zoom", (e) => g.attr("transform", e.transform));
+
+svg.call(zoom);
+
+const simulation = d3.forceSimulation(nodes)
+  .force("link", d3.forceLink(links).id(d => d.id).distance(110))
+  .force("charge", d3.forceManyBody().strength(-240))
+  .force("center", d3.forceCenter(width / 2, height / 2))
+  .force("collide", d3.forceCollide().radius(d => d.size + 15));
+
+const link = g.append("g")
+  .selectAll("line")
+  .data(links)
+  .join("line")
+  .attr("class", "link-line")
+  .attr("stroke", d => d.color)
+  .attr("stroke-width", d => d.type === "GAP" ? 2 : 1.5)
+  .attr("stroke-dasharray", d => d.type === "GAP" ? "4,4" : "none")
+  .attr("marker-end", d => `url(#arrow-${d.color.replace('#', '')})`);
+
+const node = g.append("g")
+  .selectAll("g")
+  .data(nodes)
+  .join("g")
+  .call(d3.drag()
+    .on("start", dragstarted)
+    .on("drag", dragged)
+    .on("end", dragended));
+
+const circles = node.append("circle")
+  .attr("class", "node-circle")
+  .attr("r", d => d.size)
+  .attr("fill", d => d.color);
+
+const labelGroup = node.append("g")
+  .attr("class", "node-label-group");
+
+labelGroup.append("text")
+  .attr("class", "node-label-title")
+  .attr("dy", d => d.size + 13)
+  .text(d => d.label);
+
+labelGroup.append("text")
+  .attr("class", "node-label-source")
+  .attr("dy", d => d.size + 25)
+  .text(d => `[${d.source}]`);
+
+// Funzione per evidenziare la catena a partire da un nodo
+function getDirectedPath(startNodeId) {
+  const activeNodes = new Set([startNodeId]);
+  const activeLinks = new Set();
+
+  const outgoing = new Map();
+  const incoming = new Map();
+
+  links.forEach(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source;
+    const t = typeof l.target === 'object' ? l.target.id : l.target;
+
+    if (!outgoing.has(s)) outgoing.set(s, []);
+    outgoing.get(s).push({ link: l, target: t });
+
+    if (!incoming.has(t)) incoming.set(t, []);
+    incoming.get(t).push({ link: l, source: s });
+  });
+
+  // Avanti
+  const queueForward = [startNodeId];
+  while (queueForward.length > 0) {
+    const curr = queueForward.shift();
+    if (outgoing.has(curr)) {
+      outgoing.get(curr).forEach(edge => {
+        if (!activeNodes.has(edge.target)) {
+          activeNodes.add(edge.target);
+          queueForward.push(edge.target);
+        }
+        activeLinks.add(edge.link);
+      });
+    }
+  }
+
+  // Indietro
+  const queueBackward = [startNodeId];
+  while (queueBackward.length > 0) {
+    const curr = queueBackward.shift();
+    if (incoming.has(curr)) {
+      incoming.get(curr).forEach(edge => {
+        if (!activeNodes.has(edge.source)) {
+          activeNodes.add(edge.source);
+          queueBackward.push(edge.source);
+        }
+        activeLinks.add(edge.link);
+      });
+    }
+  }
+
+  return { activeNodes, activeLinks };
+}
+
+node.on("mouseover", (event, d) => {
+  const { activeNodes, activeLinks } = getDirectedPath(d.id);
+
+  circles.classed("dimmed", n => !activeNodes.has(n.id));
+  labelGroup.classed("dimmed", n => !activeNodes.has(n.id));
+  
+  link.classed("dimmed", l => !activeLinks.has(l));
+  link.classed("highlighted", l => activeLinks.has(l));
+
+  const tt = d3.select("#tooltip");
+  tt.style("opacity", 1)
+    .style("left", (event.pageX + 15) + "px")
+    .style("top", (event.pageY - 15) + "px");
+
+  d3.select("#tt-title").text(d.label);
+  d3.select("#tt-source").text(d.source);
+  d3.select("#tt-meta").text(`ID: ${d.id}`);
+  d3.select("#tt-desc").text(d.desc);
+
+  let badgesHtml = `<span class="badge badge-${d.group}">${d.group}</span>`;
+  d3.select("#tt-badges").html(badgesHtml);
+})
+.on("mousemove", (event) => {
+  d3.select("#tooltip")
+    .style("left", (event.pageX + 15) + "px")
+    .style("top", (event.pageY - 15) + "px");
+})
+.on("mouseout", () => {
+  circles.classed("dimmed", false);
+  labelGroup.classed("dimmed", false);
+  link.classed("dimmed", false);
+  link.classed("highlighted", false);
+  d3.select("#tooltip").style("opacity", 0);
+});
+
+simulation.on("tick", () => {
+  link
+    .attr("x1", d => d.source.x)
+    .attr("y1", d => d.source.y)
+    .attr("x2", d => d.target.x)
+    .attr("y2", d => d.target.y);
+
+  node.attr("transform", d => `translate(${d.x},${d.y})`);
+});
+
+function dragstarted(event, d) {
+  if (!event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x; d.fy = d.y;
+}
+function dragged(event, d) {
+  d.fx = event.x; d.fy = event.y;
+}
+function dragended(event, d) {
+  if (!event.active) simulation.alphaTarget(0);
+  d.fx = null; d.fy = null;
+}
+
+let labelsVisible = true;
+let physicsEnabled = true;
+
+function togglePanel(panelId) {
+  const panel = document.getElementById(panelId);
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open');
+  if (panelId === 'story-panel') d3.select("#btn-story").classed("active", !isOpen);
+  if (panelId === 'legend-panel') d3.select("#btn-legend").classed("active", !isOpen);
+}
+
+function resetZoom() {
+  svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+}
+
+function toggleLabels() {
+  labelsVisible = !labelsVisible;
+  labelGroup.style("display", labelsVisible ? "block" : "none");
+}
+
+function togglePhysics() {
+  physicsEnabled = !physicsEnabled;
+  if (physicsEnabled) simulation.alphaTarget(0.3).restart();
+  else simulation.stop();
+}
+
+function openArchModal() {
+  document.getElementById("modal-overlay").classList.add("open");
+  document.getElementById("arch-modal").classList.add("open");
+}
+
+function closeArchModal() {
+  document.getElementById("modal-overlay").classList.remove("open");
+  document.getElementById("arch-modal").classList.remove("open");
+}
+</script>
+</body>
+</html>
