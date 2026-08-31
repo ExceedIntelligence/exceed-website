@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CosAI — Rete 2086 · CAST S.p.A. (dati reali 2025)</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; font-family: 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; overflow: hidden; }
+  #graph-container { width: 100vw; height: 100vh; position: relative; background: #0d1117; }
+  svg { width: 100%; height: 100%; cursor: grab; }
+  svg:active { cursor: grabbing; }
+  #tooltip {
+    position: absolute; background: rgba(22,27,34,0.95); border: 1px solid #30363d; border-radius: 10px;
+    padding: 14px 18px; pointer-events: none; opacity: 0; transition: opacity 0.15s; max-width: 400px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 1000; backdrop-filter: blur(8px);
+  }
+  #tooltip h3 { margin: 0 0 4px; font-size: 15px; color: #f0f6fc; font-weight: 600; }
+  #tooltip .source-tag { font-size: 11px; color: #58a6ff; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; }
+  #tooltip .meta { font-size: 12px; color: #8b949e; margin-bottom: 8px; }
+  #tooltip .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; margin-right: 4px; margin-bottom: 4px; }
+  .badge-PU { background: #8B5CF6; color: #fff; }
+  .badge-A-PU { background: #3B82F6; color: #fff; }
+  .badge-A-AZ { background: #10B981; color: #fff; }
+  .badge-TODO { background: #EF4444; color: #fff; }
+  .badge-REPORT { background: #F59E0B; color: #000; }
+  .badge-GAP { background: #F97316; color: #fff; }
+  .side-panel {
+    position: absolute; top: 20px; bottom: 80px; width: 460px; background: rgba(13,17,23,0.96);
+    border: 1px solid #30363d; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.7);
+    backdrop-filter: blur(12px); z-index: 200; display: flex; flex-direction: column;
+    transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), opacity 0.3s; overflow: hidden;
+  }
+  #story-panel { left: 20px; transform: translateX(-500px); opacity: 0; pointer-events: none; }
+  #story-panel.open { transform: translateX(0); opacity: 1; pointer-events: auto; }
+  #legend-panel { right: 20px; transform: translateX(480px); opacity: 0; pointer-events: none; width: 340px; }
+  #legend-panel.open { transform: translateX(0); opacity: 1; pointer-events: auto; }
+  .panel-header { background: rgba(22,27,34,0.9); padding: 14px 18px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; }
+  .panel-header h3 { font-size: 16px; color: #f0f6fc; font-weight: 600; }
+  .panel-body { padding: 18px; overflow-y: auto; font-size: 13.5px; line-height: 1.55; color: #c9d1d9; flex-grow: 1; }
+  .story-section { margin-bottom: 16px; border-bottom: 1px solid #21262d; padding-bottom: 12px; }
+  .story-section:last-child { margin-bottom: 0; border-bottom: none; }
+  .story-title { font-weight: 600; color: #58a6ff; margin-bottom: 6px; font-size: 14px; }
+  .legend-item { display: flex; align-items: center; margin-bottom: 12px; font-size: 14px; font-weight: 500; color: #f0f6fc; }
+  .legend-dot { width: 16px; height: 16px; border-radius: 50%; margin-right: 12px; flex-shrink: 0; }
+  .legend-line { width: 28px; height: 4px; margin-right: 12px; flex-shrink: 0; }
+  .legend-count { margin-left: auto; padding-left: 12px; color: #8b949e; font-size: 13px; font-weight: 600; }
+  #controls { position: absolute; bottom: 20px; left: 20px; display: flex; gap: 8px; z-index: 100; flex-wrap: wrap; max-width: 70%; }
+  .btn {
+    background: rgba(22,27,34,0.92); border: 1px solid #30363d; color: #c9d1d9; padding: 8px 14px;
+    border-radius: 8px; font-size: 12px; cursor: pointer; transition: all 0.2s; backdrop-filter: blur(8px);
+  }
+  .btn:hover { background: #30363d; border-color: #58a6ff; }
+  .btn.active { background: #1f6feb; border-color: #58a6ff; color: #fff; }
+  #info-panel {
+    position: absolute; bottom: 20px; right: 20px; background: rgba(22,27,34,0.92); border: 1px solid #30363d;
+    border-radius: 12px; padding: 14px 18px; max-width: 320px; font-size: 12px; color: #8b949e;
+    backdrop-filter: blur(8px); z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  #info-panel strong { color: #f0f6fc; }
+  .link-line { stroke-opacity: 0.45; transition: stroke-opacity 0.2s, stroke-width 0.2s, opacity 0.2s; }
+  .link-line.highlighted { stroke-opacity: 1; stroke-width: 3px !important; }
+  .node-circle { stroke: #0d1117; stroke-width: 2px; cursor: pointer; transition: opacity 0.2s; }
+  .node-circle.dimmed { opacity: 0.08; }
+  .link-line.dimmed { opacity: 0.03; }
+  .node-label-group { pointer-events: none; transition: opacity 0.2s; }
+  .node-label-group.dimmed { opacity: 0.08; }
+  .node-label-title { font-size: 10px; fill: #ffffff; text-anchor: middle; font-weight: 700; }
+  .node-label-source { font-size: 8px; fill: #8b949e; text-anchor: middle; font-weight: 400; font-style: italic; }
+  code { background: #21262d; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="graph-container">
+  <svg id="graph"></svg>
+  <div id="tooltip">
+    <h3 id="tt-title"></h3>
+    <div class="source-tag" id="tt-source"></div>
+    <div class="meta" id="tt-meta"></div>
+    <div id="tt-badges"></div>
+    <div class="meta" id="tt-desc" style="margin-top:8px;"></div>
+  </div>
+
+  <div id="legend-panel" class="side-panel">
+    <div class="panel-header">
+      <h3>GRUPPI NODI · CAST</h3>
+      <button class="btn" onclick="togglePanel('legend-panel')" style="padding:2px 8px;">✕</button>
+    </div>
+    <div class="panel-body">
+      <div class="legend-item"><div class="legend-dot" style="background:#8B5CF6"></div>Celle PU (norme)<span class="legend-count" id="c-pu">—</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#3B82F6"></div>Atomi PU (vincoli)<span class="legend-count" id="c-apu">—</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#10B981"></div>Atomi AZ (evidenze)<span class="legend-count" id="c-aaz">—</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#EF4444"></div>TO-DO<span class="legend-count" id="c-todo">—</span></div>
+      <div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div>Report / TdB<span class="legend-count" id="c-rep">—</span></div>
+      <h3 style="font-size:15px;color:#f0f6fc;margin-top:20px;margin-bottom:12px;">COLLEGAMENTI</h3>
+      <div class="legend-item"><div class="legend-line" style="background:#10B981"></div>COMPONE / ALLINEATO</div>
+      <div class="legend-item"><div class="legend-line" style="background:#8B5CF6"></div>CORRELA (norme)</div>
+      <div class="legend-item"><div class="legend-line" style="background:#EF4444;height:0;border-top:2px dashed #EF4444"></div>GAP (evidenza assente nel fascicolo)</div>
+      <div class="legend-item"><div class="legend-line" style="background:#F59E0B"></div>GENERA / ALIMENTA</div>
+      <p style="margin-top:16px;font-size:12px;color:#8b949e;line-height:1.4">
+        Perimetro: bilanci XBRL 2025, Deloitte, Collegio, verbali 29/06/2026, relazione gestione, ricevuta deposito, anagrafica CosAI.
+        GAP = mancanza di evidenza nei documenti processati, non accertamento di inesistenza operativa.
+      </p>
+    </div>
+  </div>
+
+  <div id="story-panel" class="side-panel">
+    <div class="panel-header">
+      <h3>Storia e Diagnosi · CAST S.p.A.</h3>
+      <button class="btn" onclick="togglePanel('story-panel')" style="padding:2px 8px;">✕</button>
+    </div>
+    <div class="panel-body">
+      <div class="story-section">
+        <div class="story-title">1. Identità e dimensioni (fonti verificate)</div>
+        <strong>CAST S.p.A.</strong> — Volpiano (TO), UL Casalgrasso (CN).<br>
+        Capitale sociale <strong>€ 4.500.000</strong> i.v. · Socio unico <strong>Setor S.r.l. 100%</strong>.<br>
+        Ricavi 2025: <strong>€ 52.188.253</strong> (2024: € 52.030.747) · Attivo: <strong>€ 56.775.002</strong> · Dipendenti medi: <strong>236</strong>.<br>
+        Classificazione dimensionale UE: <strong>Grande Impresa</strong> (attivo &gt; 43 M€ e ricavi &gt; 50 M€).<br>
+        Schema bilancio: <strong>ordinario</strong>. Revisione: <strong>Deloitte &amp; Touche S.p.A.</strong> — giudizio senza rilievi 2025.
+      </div>
+      <div class="story-section">
+        <div class="story-title">2. Governance documentata (ALLINEATO)</div>
+        CdA a <strong>5 membri</strong>, rinnovato assemblea <strong>29/06/2026</strong> (scadenza approvazione bilancio 31/12/2028).<br>
+        Presidente: Francesco Ronco (anche Datore di lavoro HSE).<br>
+        AD: Sergio Ronco · altri consiglieri con deleghe funzionali (produzione, vendite estero, AFC).<br>
+        Collegio Sindacale collegiale (Gariglio Pres., Mastromauro, Nuzzo).<br>
+        Revisore legale: Deloitte. Deposito bilancio 2025 effettuato.<br>
+        Certificazioni: ISO 9001, ISO 14001 (evidenza in fascicolo / relazione gestione).
+      </div>
+      <div class="story-section">
+        <div class="story-title">3. Collisioni e GAP (solo evidenza mancante nel set)</div>
+        <ul style="padding-left:16px;margin-top:6px;">
+          <li style="margin-bottom:4px;"><strong>Art. 2086 c.2</strong> — obbligo assetti adeguati: organi e monitoraggio economico presenti; <em>formalizzazione</em> organigramma / funzionigramma / risk register / reporting periodico CdA <strong>non risultano</strong> nei 7 file processati → GAP documentale.</li>
+          <li style="margin-bottom:4px;"><strong>D.Lgs. 24/2023</strong> — whistleblowing obbligatorio (≥50 dipendenti): policy/canale <strong>non risultano</strong> nel fascicolo demo → GAP prioritario da verificare (non “assenza accertata”).</li>
+          <li style="margin-bottom:4px;"><strong>Indicatori crisi / tesoreria</strong> — attenzione finanziaria in relazione gestione e bilancio; piano tesoreria rolling / DSCR formale <strong>non documentati</strong> nel set → GAP.</li>
+          <li style="margin-bottom:4px;"><strong>231 / OdV</strong> — anagrafica progetto indica presenza; nei 7 file civilistici 2025 non c’è atto di nomina/MOG → stato: da arricchire con fonte dedicata, non conflitto inventato.</li>
+        </ul>
+      </div>
+      <div class="story-section">
+        <div class="story-title">4. TO-DO deterministici (da GAP, non da crisi inventata)</div>
+        <ul style="padding-left:16px;margin-top:4px;">
+          <li style="margin-bottom:6px;"><strong style="color:#EF4444">TODO-001</strong> — Acquisire evidenza canale/procedure whistleblowing (obbligo soggettivo applicabile).</li>
+          <li style="margin-bottom:6px;"><strong style="color:#EF4444">TODO-002</strong> — Formalizzare e depositare in KB organigramma + funzionigramma + matrice deleghe (già sostanzialmente esistenti).</li>
+          <li style="margin-bottom:6px;"><strong style="color:#EF4444">TODO-003</strong> — Documentare piano tesoreria / DSCR o report periodico continuità verso CdA/Collegio.</li>
+          <li style="margin-bottom:6px;"><strong style="color:#EF4444">TODO-004</strong> — Caricare atto nomina OdV + MOG 231 (se esistenti) per chiudere GAP anagrafica vs fascicolo civilistico.</li>
+        </ul>
+      </div>
+      <div class="story-section">
+        <div class="story-title">5. Scoring (onboarding su 7 documenti + anagrafica)</div>
+        <div style="font-size:14px;font-weight:bold;color:#F59E0B;margin-top:4px;">
+          Score compliance documentale: ~68 / 100 — nessun HARD STOP su crisi
+        </div>
+        <div style="font-size:12px;color:#8b949e;margin-top:4px;">
+          Organi SPA, revisione, deposito, numeri e continuità: ALLINEATI.<br>
+          Gap concentrati su formalizzazione organizzativa, whistleblowing e reporting prospettico.<br>
+          Non confrontabile con lo score 42/HARD STOP del campione fittizio (capitale 120k, -12%, OdV monocratico consulente).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button class="btn" onclick="toggleFullscreen()">Schermo intero</button>
+    <button class="btn" id="btn-story" onclick="togglePanel('story-panel')">Storia &amp; Diagnosi CAST</button>
+    <button class="btn" id="btn-legend" onclick="togglePanel('legend-panel')">Legenda</button>
+    <button class="btn" onclick="resetZoom()">Reset zoom</button>
+    <button class="btn" onclick="toggleLabels()">Etichette</button>
+    <button class="btn" onclick="togglePhysics()">Fisica</button>
+  </div>
+
+  <div id="info-panel">
+    <strong>CosAI · CAST S.p.A. 2025</strong><br>
+    Score doc.: <strong style="color:#F59E0B">~68/100</strong> · <span style="color:#10B981">nessun HARD STOP crisi</span><br>
+    Nodi: <strong id="n-nodes">—</strong> · Archi: <strong id="n-links">—</strong><br>
+    <span style="color:#10B981">●</span> ALLINEATI · <span style="color:#EF4444">●</span> GAP documentali<br>
+    <span style="font-size:11px;color:#8b949e">Dati: anagrafica + XBRL/Deloitte/Collegio/verbali 29.06.2026</span>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+// NODI — CAST S.p.A. (solo fatti verificati da anagrafica + set 2025)
+// =============================================================================
+const nodes = [
+  // CELLE PU
+  {id:"PU-2086", group:"PU", label:"Art. 2086 c.2", source:"Codice Civile", desc:"Obbligo assetti organizzativi, amministrativi e contabili adeguati; rilevazione tempestiva della crisi e perdita della continuità.", size:22, color:"#8B5CF6"},
+  {id:"PU-14CCII", group:"PU", label:"CCII (allerta)", source:"Codice della Crisi", desc:"Assetti idonei alla rilevazione tempestiva della crisi; doveri di segnalazione e monitoraggio.", size:20, color:"#8B5CF6"},
+  {id:"PU-2381", group:"PU", label:"Art. 2381 c.c.", source:"Codice Civile", desc:"Doveri del CdA: valutazione andamento gestione; deleghe e informazione.", size:18, color:"#8B5CF6"},
+  {id:"PU-2397", group:"PU", label:"Art. 2397 ss.", source:"Codice Civile", desc:"Collegio sindacale obbligatorio nelle S.p.A.; composizione e doveri.", size:18, color:"#8B5CF6"},
+  {id:"PU-2409bis", group:"PU", label:"Art. 2409-bis", source:"Codice Civile / D.Lgs. 39/2010", desc:"Revisione legale obbligatoria nelle S.p.A.", size:18, color:"#8B5CF6"},
+  {id:"PU-DLGS24", group:"PU", label:"D.Lgs. 24/2023", source:"Whistleblowing", desc:"Canale di segnalazione obbligatorio per soggetti privati con media ≥ 50 dipendenti.", size:18, color:"#8B5CF6"},
+  {id:"PU-231", group:"PU", label:"D.Lgs. 231/01", source:"Responsabilità ente", desc:"MOG e OdV: non obbligatori per tutte le SPA, ma rilevanti per esimente e governance.", size:16, color:"#8B5CF6"},
+
+  // ATOMI PU
+  {id:"A-PU-001", group:"A-PU", label:"A-PU-001", source:"2086 c.2", desc:"Adozione di assetti organizzativi adeguati alla natura e dimensione dell'impresa.", size:12, color:"#3B82F6"},
+  {id:"A-PU-002", group:"A-PU", label:"A-PU-002", source:"2086 c.2", desc:"Assetti amministrativi e contabili idonei; continuità aziendale.", size:12, color:"#3B82F6"},
+  {id:"A-PU-003", group:"A-PU", label:"A-PU-003", source:"2086 / CCII", desc:"Rilevazione tempestiva di squilibri e segnali di crisi.", size:12, color:"#3B82F6"},
+  {id:"A-PU-004", group:"A-PU", label:"A-PU-004", source:"2381", desc:"CdA valuta andamento gestione e adegua assetti; informativa tra organi.", size:12, color:"#3B82F6"},
+  {id:"A-PU-005", group:"A-PU", label:"A-PU-005", source:"2397", desc:"Presenza e operatività del Collegio Sindacale nelle S.p.A.", size:12, color:"#3B82F6"},
+  {id:"A-PU-006", group:"A-PU", label:"A-PU-006", source:"2409-bis", desc:"Revisione legale affidata a soggetto abilitato.", size:12, color:"#3B82F6"},
+  {id:"A-PU-007", group:"A-PU", label:"A-PU-007", source:"D.Lgs. 24/2023", desc:"Canale whistleblowing e procedure per imprese ≥ 50 dipendenti.", size:12, color:"#3B82F6"},
+  {id:"A-PU-008", group:"A-PU", label:"A-PU-008", source:"231/01", desc:"Eventuale MOG e OdV; indipendenza e flussi informativi.", size:12, color:"#3B82F6"},
+  {id:"A-PU-009", group:"A-PU", label:"A-PU-009", source:"2086 sostanziale", desc:"Formalizzazione (organigramma, deleghe, reporting) come prova degli assetti.", size:12, color:"#3B82F6"},
+
+  // ATOMI AZ — ALLINEATI (evidenza nei documenti)
+  {id:"A-AZ-001", group:"A-AZ", label:"A-AZ-001", source:"Visura / Anagrafica", desc:"CAST S.p.A. · capitale €4,5M · socio unico Setor 100% · Grande Impresa (attivo 56,8M / ricavi 52,2M / 236 dip.).", size:14, color:"#10B981"},
+  {id:"A-AZ-002", group:"A-AZ", label:"A-AZ-002", source:"Verbale assemblea 29/06/2026", desc:"CdA 5 membri rinnovato; Presidente F. Ronco; AD S. Ronco; deleghe funzionali documentate.", size:14, color:"#10B981"},
+  {id:"A-AZ-003", group:"A-AZ", label:"A-AZ-003", source:"Verbale / Collegio", desc:"Collegio Sindacale collegiale nominato (Gariglio, Mastromauro, Nuzzo).", size:14, color:"#10B981"},
+  {id:"A-AZ-004", group:"A-AZ", label:"A-AZ-004", source:"Deloitte 2025", desc:"Revisione legale Deloitte & Touche — giudizio senza rilievi sul bilancio 31.12.2025.", size:14, color:"#10B981"},
+  {id:"A-AZ-005", group:"A-AZ", label:"A-AZ-005", source:"Ricevuta deposito", desc:"Approvazione bilancio 29/06/2026 e deposito al Registro Imprese effettuati.", size:14, color:"#10B981"},
+  {id:"A-AZ-006", group:"A-AZ", label:"A-AZ-006", source:"Bilancio / Rel. gestione", desc:"Ricavi stabili (~52M); indicatori economico-finanziari e continuità dichiarati; assenza squilibri patrimoniali dichiarata.", size:14, color:"#10B981"},
+  {id:"A-AZ-007", group:"A-AZ", label:"A-AZ-007", source:"ISO / Rel. gestione", desc:"Certificazioni ISO 9001 e ISO 14001; presidi HSE con Datore di lavoro identificato (Pres. CdA).", size:14, color:"#10B981"},
+
+  // ATOMI AZ — GAP (manca evidenza nel fascicolo processato)
+  {id:"A-AZ-G01", group:"A-AZ", label:"A-AZ-G01", source:"GAP fascicolo", desc:"Organigramma / funzionigramma formalizzati e comunicati: non risultano nei 7 documenti 2025.", size:13, color:"#F97316"},
+  {id:"A-AZ-G02", group:"A-AZ", label:"A-AZ-G02", source:"GAP fascicolo", desc:"Policy e canale whistleblowing: non risultano nel set demo (obbligo soggettivo applicabile con 236 dipendenti).", size:13, color:"#F97316"},
+  {id:"A-AZ-G03", group:"A-AZ", label:"A-AZ-G03", source:"GAP fascicolo", desc:"Piano tesoreria rolling / DSCR formale / reporting periodico scostamenti: non documentati nel set.", size:13, color:"#F97316"},
+  {id:"A-AZ-G04", group:"A-AZ", label:"A-AZ-G04", source:"GAP fascicolo", desc:"Atto nomina OdV e MOG 231: non presenti nei 7 file civilistici (anagrafica progetto li indica presenti).", size:13, color:"#F97316"},
+
+  // TO-DO
+  {id:"TODO-001", group:"TODO", label:"TODO-001", source:"CosAI", desc:"Verificare/acquisire evidenza canale e procedure whistleblowing (D.Lgs. 24/2023).", size:15, color:"#EF4444"},
+  {id:"TODO-002", group:"TODO", label:"TODO-002", source:"CosAI", desc:"Formalizzare organigramma, funzionigramma e matrice deleghe in KB AZ.", size:15, color:"#EF4444"},
+  {id:"TODO-003", group:"TODO", label:"TODO-003", source:"CosAI", desc:"Documentare piano tesoreria / DSCR o report continuità periodico verso CdA e Collegio.", size:15, color:"#EF4444"},
+  {id:"TODO-004", group:"TODO", label:"TODO-004", source:"CosAI", desc:"Caricare atto nomina OdV + MOG 231 per chiudere scostamento anagrafica vs fascicolo.", size:15, color:"#EF4444"},
+
+  // REPORT
+  {id:"REPORT-TDB", group:"REPORT", label:"TdB Onboarding", source:"CosAI Output", desc:"Tableau de Bord di primo livello: copertura atomi PU vs evidenze AZ CAST 2025.", size:16, color:"#F59E0B"}
+];
+
+// =============================================================================
+// LINK
+// =============================================================================
+const links = [
+  // PU correlazioni
+  {source:"PU-2086", target:"PU-14CCII", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-2381", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-2397", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-2409bis", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-DLGS24", type:"CORRELA", color:"#8B5CF6"},
+  {source:"PU-2086", target:"PU-231", type:"CORRELA", color:"#8B5CF6"},
+
+  // PU → A-PU (COMPONE)
+  {source:"PU-2086", target:"A-PU-001", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2086", target:"A-PU-002", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2086", target:"A-PU-003", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2086", target:"A-PU-009", type:"COMPONE", color:"#10B981"},
+  {source:"PU-14CCII", target:"A-PU-003", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2381", target:"A-PU-004", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2397", target:"A-PU-005", type:"COMPONE", color:"#10B981"},
+  {source:"PU-2409bis", target:"A-PU-006", type:"COMPONE", color:"#10B981"},
+  {source:"PU-DLGS24", target:"A-PU-007", type:"COMPONE", color:"#10B981"},
+  {source:"PU-231", target:"A-PU-008", type:"COMPONE", color:"#10B981"},
+
+  // A-PU → A-AZ ALLINEATO
+  {source:"A-PU-001", target:"A-AZ-002", type:"ALLINEATO", color:"#10B981"},
+  {source:"A-PU-002", target:"A-AZ-006", type:"ALLINEATO", color:"#10B981"},
+  {source:"A-PU-002", target:"A-AZ-005", type:"ALLINEATO", color:"#10B981"},
+  {source:"A-PU-004", target:"A-AZ-002", type:"ALLINEATO", color:"#10B981"},
+  {source:"A-PU-005", target:"A-AZ-003", type:"ALLINEATO", color:"#10B981"},
+  {source:"A-PU-006", target:"A-AZ-004", type:"ALLINEATO", color:"#10B981"},
+  {source:"A-PU-003", target:"A-AZ-006", type:"ALLINEATO", color:"#10B981"},
+
+  // A-PU → A-AZ GAP
+  {source:"A-PU-009", target:"A-AZ-G01", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-007", target:"A-AZ-G02", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-003", target:"A-AZ-G03", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-008", target:"A-AZ-G04", type:"GAP", color:"#EF4444"},
+  {source:"A-PU-001", target:"A-AZ-G01", type:"GAP", color:"#EF4444"},
+
+  // AZ correlazioni
+  {source:"A-AZ-001", target:"A-AZ-002", type:"CORRELA", color:"#8B5CF6"},
+  {source:"A-AZ-002", target:"A-AZ-003", type:"CORRELA", color:"#8B5CF6"},
+  {source:"A-AZ-006", target:"A-AZ-007", type:"CORRELA", color:"#8B5CF6"},
+
+  // GAP → TODO
+  {source:"A-AZ-G02", target:"TODO-001", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-G01", target:"TODO-002", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-G03", target:"TODO-003", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-G04", target:"TODO-004", type:"GENERA", color:"#F59E0B"},
+
+  // TODO → REPORT
+  {source:"TODO-001", target:"REPORT-TDB", type:"GENERA", color:"#F59E0B"},
+  {source:"TODO-002", target:"REPORT-TDB", type:"GENERA", color:"#F59E0B"},
+  {source:"TODO-003", target:"REPORT-TDB", type:"GENERA", color:"#F59E0B"},
+  {source:"TODO-004", target:"REPORT-TDB", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-001", target:"REPORT-TDB", type:"GENERA", color:"#F59E0B"},
+  {source:"A-AZ-004", target:"REPORT-TDB", type:"GENERA", color:"#F59E0B"}
+];
+
+// =============================================================================
+// D3
+// =============================================================================
+const width = window.innerWidth;
+const height = window.innerHeight;
+const svg = d3.select("#graph").attr("viewBox", [0, 0, width, height]);
+const defs = svg.append("defs");
+["#8B5CF6","#10B981","#EF4444","#F59E0B","#F97316"].forEach(c => {
+  defs.append("marker").attr("id", "arrow-"+c.replace("#",""))
+    .attr("viewBox","0 -5 10 10").attr("refX",22).attr("refY",0)
+    .attr("markerWidth",6).attr("markerHeight",6).attr("orient","auto")
+    .append("path").attr("d","M0,-5L10,0L0,5").attr("fill",c);
+});
+const g = svg.append("g");
+const zoom = d3.zoom().scaleExtent([0.15, 4]).on("zoom", e => g.attr("transform", e.transform));
+svg.call(zoom);
+
+const simulation = d3.forceSimulation(nodes)
+  .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+  .force("charge", d3.forceManyBody().strength(-220))
+  .force("center", d3.forceCenter(width/2, height/2))
+  .force("collide", d3.forceCollide().radius(d => d.size + 14));
+
+const link = g.append("g").selectAll("line").data(links).join("line")
+  .attr("class","link-line")
+  .attr("stroke", d => d.color)
+  .attr("stroke-width", d => d.type === "GAP" ? 2.2 : 1.5)
+  .attr("stroke-dasharray", d => d.type === "GAP" ? "5,4" : "none")
+  .attr("marker-end", d => "url(#arrow-"+d.color.replace("#","")+")");
+
+const node = g.append("g").selectAll("g").data(nodes).join("g")
+  .call(d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended));
+
+const circles = node.append("circle").attr("class","node-circle")
+  .attr("r", d => d.size).attr("fill", d => d.color);
+
+const labelGroup = node.append("g").attr("class","node-label-group");
+labelGroup.append("text").attr("class","node-label-title").attr("dy", d => d.size+12).text(d => d.label);
+labelGroup.append("text").attr("class","node-label-source").attr("dy", d => d.size+23).text(d => "["+d.source+"]");
+
+function getDirectedPath(startId) {
+  const activeNodes = new Set([startId]);
+  const activeLinks = new Set();
+  const outgoing = new Map(), incoming = new Map();
+  links.forEach(l => {
+    const s = typeof l.source === "object" ? l.source.id : l.source;
+    const t = typeof l.target === "object" ? l.target.id : l.target;
+    if (!outgoing.has(s)) outgoing.set(s, []);
+    outgoing.get(s).push({link:l, target:t});
+    if (!incoming.has(t)) incoming.set(t, []);
+    incoming.get(t).push({link:l, source:s});
+  });
+  const qF = [startId];
+  while (qF.length) {
+    const curr = qF.shift();
+    (outgoing.get(curr)||[]).forEach(e => {
+      if (!activeNodes.has(e.target)) { activeNodes.add(e.target); qF.push(e.target); }
+      activeLinks.add(e.link);
+    });
+  }
+  const qB = [startId];
+  while (qB.length) {
+    const curr = qB.shift();
+    (incoming.get(curr)||[]).forEach(e => {
+      if (!activeNodes.has(e.source)) { activeNodes.add(e.source); qB.push(e.source); }
+      activeLinks.add(e.link);
+    });
+  }
+  return { activeNodes, activeLinks };
+}
+
+node.on("mouseover", (event, d) => {
+  const { activeNodes, activeLinks } = getDirectedPath(d.id);
+  circles.classed("dimmed", n => !activeNodes.has(n.id));
+  labelGroup.classed("dimmed", n => !activeNodes.has(n.id));
+  link.classed("dimmed", l => !activeLinks.has(l)).classed("highlighted", l => activeLinks.has(l));
+  d3.select("#tooltip").style("opacity",1)
+    .style("left",(event.pageX+15)+"px").style("top",(event.pageY-15)+"px");
+  d3.select("#tt-title").text(d.label);
+  d3.select("#tt-source").text(d.source);
+  d3.select("#tt-meta").text("ID: "+d.id);
+  d3.select("#tt-desc").text(d.desc);
+  d3.select("#tt-badges").html('<span class="badge badge-'+d.group+'">'+d.group+'</span>');
+}).on("mousemove", event => {
+  d3.select("#tooltip").style("left",(event.pageX+15)+"px").style("top",(event.pageY-15)+"px");
+}).on("mouseout", () => {
+  circles.classed("dimmed", false); labelGroup.classed("dimmed", false);
+  link.classed("dimmed", false).classed("highlighted", false);
+  d3.select("#tooltip").style("opacity",0);
+});
+
+simulation.on("tick", () => {
+  link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+  node.attr("transform", d => "translate("+d.x+","+d.y+")");
+});
+
+function dragstarted(event,d){ if(!event.active) simulation.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; }
+function dragged(event,d){ d.fx=event.x; d.fy=event.y; }
+function dragended(event,d){ if(!event.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }
+
+let labelsVisible = true, physicsEnabled = true;
+function togglePanel(id){
+  const p = document.getElementById(id);
+  const open = p.classList.contains("open");
+  p.classList.toggle("open");
+  if(id==="story-panel") d3.select("#btn-story").classed("active", !open);
+  if(id==="legend-panel") d3.select("#btn-legend").classed("active", !open);
+}
+function resetZoom(){ svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity); }
+function toggleLabels(){ labelsVisible=!labelsVisible; labelGroup.style("display", labelsVisible?"block":"none"); }
+function togglePhysics(){ physicsEnabled=!physicsEnabled; if(physicsEnabled) simulation.alphaTarget(0.3).restart(); else simulation.stop(); }
+function toggleFullscreen(){
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+}
+
+// counts
+document.getElementById("n-nodes").textContent = nodes.length;
+document.getElementById("n-links").textContent = links.length;
+const cnt = g => nodes.filter(n => n.group===g).length;
+document.getElementById("c-pu").textContent = cnt("PU");
+document.getElementById("c-apu").textContent = cnt("A-PU");
+document.getElementById("c-aaz").textContent = cnt("A-AZ");
+document.getElementById("c-todo").textContent = cnt("TODO");
+document.getElementById("c-rep").textContent = cnt("REPORT");
+</script>
+</body>
+</html>
